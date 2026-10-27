@@ -97,6 +97,26 @@ func (bc *BoolConstant) Accept(visitor Visitor) interface{} {
 	return visitor.VisitBoolConstant(bc)
 }
 
+type FloatConstant struct {
+	Value float64
+}
+
+func NewFloatConstant(value float64) *FloatConstant {
+	return &FloatConstant{Value: value}
+}
+
+func (fc *FloatConstant) Type() ExpressionType {
+	return FloatType
+}
+
+func (fc *FloatConstant) String() string {
+	return fmt.Sprintf("%g", fc.Value)
+}
+
+func (fc *FloatConstant) Accept(visitor Visitor) interface{} {
+	return visitor.VisitFloatConstant(fc)
+}
+
 // BinaryOperation представляет бинарную операцию
 type BinaryOperation struct {
 	Left     SymbolicExpression
@@ -112,13 +132,14 @@ func (bo *BinaryOperation) validate() error {
 
 	switch bo.Operator {
 	case ADD, SUB, MUL, DIV, MOD:
-		if lt != IntType || rt != IntType {
-			return fmt.Errorf(
-				"operator %s requires int operands, got %s and %s",
-				bo.Operator, lt, rt,
-			)
+		if lt != rt {
+			return fmt.Errorf("operator %s requires same operand types, got %s and %s",
+				bo.Operator, lt, rt)
 		}
-
+		if lt != IntType && lt != FloatType {
+			return fmt.Errorf("operator %s requires int or float operands, got %s",
+				bo.Operator, lt)
+		}
 	case EQ, NE:
 		if lt != rt {
 			return fmt.Errorf(
@@ -174,6 +195,61 @@ func (bo *BinaryOperation) String() string {
 		bo.Operator.String(),
 		bo.Right.String(),
 	)
+}
+
+type UnaryOperator int
+
+const (
+	NEG UnaryOperator = iota
+	XOR
+)
+
+func (op UnaryOperator) String() string {
+	switch op {
+	case NEG:
+		return "-"
+	case XOR:
+		return "^"
+	default:
+		return "?"
+	}
+}
+
+type UnaryOperation struct {
+	Operand  SymbolicExpression
+	Operator UnaryOperator
+}
+
+func NewUnaryOperation(operand SymbolicExpression, op UnaryOperator) *UnaryOperation {
+	uo := &UnaryOperation{Operand: operand, Operator: op}
+	if err := uo.validate(); err != nil {
+		panic(fmt.Sprintf("invalid unary operation: %v", err))
+	}
+	return uo
+}
+
+func (uo *UnaryOperation) validate() error {
+	if uo.Operand.Type() != IntType {
+		return fmt.Errorf("operator %s requires int operand, got %s",
+			uo.Operator, uo.Operand.Type())
+	}
+	return nil
+}
+
+func (uo *UnaryOperation) Type() ExpressionType { return IntType }
+
+func (uo *UnaryOperation) String() string {
+	switch uo.Operator {
+	case NEG:
+		return fmt.Sprintf("(-%s)", uo.Operand.String())
+	case XOR:
+		return fmt.Sprintf("(^%s)", uo.Operand.String())
+	}
+	return "?"
+}
+
+func (uo *UnaryOperation) Accept(visitor Visitor) interface{} {
+	return visitor.VisitUnaryOperation(uo)
 }
 
 // Accept реализует Visitor pattern

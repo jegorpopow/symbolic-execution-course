@@ -67,6 +67,26 @@ func (zt *Z3Translator) VisitVariable(expr *symbolic.SymbolicVariable) interface
 	return v
 }
 
+func (zt *Z3Translator) VisitFloatConstant(expr *symbolic.FloatConstant) interface{} {
+	return nil
+}
+
+func (zt *Z3Translator) VisitUnaryOperation(expr *symbolic.UnaryOperation) interface{} {
+	operand := expr.Operand.Accept(zt)
+	if operand == nil {
+		return nil
+	}
+	switch expr.Operator {
+	case symbolic.NEG:
+		if v, ok := operand.(z3.Int); ok {
+			return v.Neg()
+		}
+	case symbolic.XOR:
+		return nil
+	}
+	return nil
+}
+
 // VisitIntConstant транслирует целочисленную константу в Z3
 func (zt *Z3Translator) VisitIntConstant(expr *symbolic.IntConstant) interface{} {
 	return zt.ctx.FromBigInt(
