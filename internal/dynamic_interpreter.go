@@ -89,10 +89,23 @@ func (interpreter *Interpreter) moveTo(block *ssa.BasicBlock) {
 	frame := interpreter.currentStackframe()
 	frame.IP.JumpTo(block)
 
+	for _, instr := range block.Instrs {
+		if value, ok := instr.(ssa.Value); ok {
+			delete(frame.LocalMemory, getStringKey(value))
+		}
+	}
+
+	predecessor := frame.IP.PredecessorIndex()
+	phiValues := make(map[string]symbolic.SymbolicExpression)
 	for phi, ok := frame.IP.Phi(); ok; phi, ok = frame.IP.Phi() {
-		frame.LocalMemory[getStringKey(phi)] =
-			interpreter.resolveExpression(phi.Edges[frame.IP.PredecessorIndex()])
+		if predecessor < 0 {
+			panic("phi without matching predecessor")
+		}
+		phiValues[getStringKey(phi)] = interpreter.resolveExpression(phi.Edges[predecessor])
 		frame.IP.Advance()
+	}
+	for name, value := range phiValues {
+		frame.LocalMemory[name] = value
 	}
 }
 
