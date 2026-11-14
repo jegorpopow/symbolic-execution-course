@@ -1,7 +1,10 @@
 // Package symbolic содержит конкретные реализации символьных выражений
 package symbolic
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // SymbolicExpression - базовый интерфейс для всех символьных выражений
 type SymbolicExpression interface {
@@ -94,6 +97,26 @@ func (bc *BoolConstant) Accept(visitor Visitor) interface{} {
 	return visitor.VisitBoolConstant(bc)
 }
 
+type FloatConstant struct {
+	Value float64
+}
+
+func NewFloatConstant(value float64) *FloatConstant {
+	return &FloatConstant{Value: value}
+}
+
+func (fc *FloatConstant) Type() ExpressionType {
+	return FloatType
+}
+
+func (fc *FloatConstant) String() string {
+	return fmt.Sprintf("%g", fc.Value)
+}
+
+func (fc *FloatConstant) Accept(visitor Visitor) interface{} {
+	return visitor.VisitFloatConstant(fc)
+}
+
 // BinaryOperation представляет бинарную операцию
 type BinaryOperation struct {
 	Left     SymbolicExpression
@@ -104,25 +127,129 @@ type BinaryOperation struct {
 // TODO: Реализуйте следующие методы в рамках домашнего задания
 
 // NewBinaryOperation создаёт новую бинарную операцию
+func (bo *BinaryOperation) validate() error {
+	lt, rt := bo.Left.Type(), bo.Right.Type()
+
+	switch bo.Operator {
+	case ADD, SUB, MUL, DIV, MOD:
+		if lt != rt {
+			return fmt.Errorf("operator %s requires same operand types, got %s and %s",
+				bo.Operator, lt, rt)
+		}
+		if lt != IntType && lt != FloatType {
+			return fmt.Errorf("operator %s requires int or float operands, got %s",
+				bo.Operator, lt)
+		}
+	case EQ, NE:
+		if lt != rt {
+			return fmt.Errorf(
+				"operator %s requires operands of the same type, got %s and %s",
+				bo.Operator, lt, rt,
+			)
+		}
+
+	case LT, LE, GT, GE:
+		if lt != IntType || rt != IntType {
+			return fmt.Errorf(
+				"operator %s requires int operands, got %s and %s",
+				bo.Operator, lt, rt,
+			)
+		}
+
+	default:
+		return fmt.Errorf("unknown binary operator %d", bo.Operator)
+	}
+
+	return nil
+}
+
 func NewBinaryOperation(left, right SymbolicExpression, op BinaryOperator) *BinaryOperation {
-	// TODO: Реализовать
-	// Создать новую бинарную операцию и проверить совместимость типов
-	panic("не реализовано")
+	bo := &BinaryOperation{
+		Left:     left,
+		Right:    right,
+		Operator: op,
+	}
+	if err := bo.validate(); err != nil {
+		panic(fmt.Sprintf("invalid binary operation: %v", err))
+	}
+	return bo
 }
 
 // Type возвращает результирующий тип операции
 func (bo *BinaryOperation) Type() ExpressionType {
-	// TODO: Реализовать
-	// Определить результирующий тип на основе операции и типов операндов
-	// Например: int + int = int, int < int = bool
-	panic("не реализовано")
+	switch bo.Operator {
+	case ADD, SUB, MUL, DIV, MOD:
+		return IntType
+	case EQ, NE, LT, LE, GT, GE:
+		return BoolType
+	default:
+		panic(fmt.Sprintf("unknown binary operator: %d", bo.Operator))
+	}
 }
 
 // String возвращает строковое представление операции
 func (bo *BinaryOperation) String() string {
-	// TODO: Реализовать
-	// Формат: "(left operator right)"
-	panic("не реализовано")
+	return fmt.Sprintf(
+		"(%s %s %s)",
+		bo.Left.String(),
+		bo.Operator.String(),
+		bo.Right.String(),
+	)
+}
+
+type UnaryOperator int
+
+const (
+	NEG UnaryOperator = iota
+	XOR
+)
+
+func (op UnaryOperator) String() string {
+	switch op {
+	case NEG:
+		return "-"
+	case XOR:
+		return "^"
+	default:
+		return "?"
+	}
+}
+
+type UnaryOperation struct {
+	Operand  SymbolicExpression
+	Operator UnaryOperator
+}
+
+func NewUnaryOperation(operand SymbolicExpression, op UnaryOperator) *UnaryOperation {
+	uo := &UnaryOperation{Operand: operand, Operator: op}
+	if err := uo.validate(); err != nil {
+		panic(fmt.Sprintf("invalid unary operation: %v", err))
+	}
+	return uo
+}
+
+func (uo *UnaryOperation) validate() error {
+	if uo.Operand.Type() != IntType {
+		return fmt.Errorf("operator %s requires int operand, got %s",
+			uo.Operator, uo.Operand.Type())
+	}
+	return nil
+}
+
+func (uo *UnaryOperation) Type() ExpressionType { return IntType }
+
+func (uo *UnaryOperation) String() string {
+	switch uo.Operator {
+	case NEG:
+		return fmt.Sprintf("(-%s)", uo.Operand.String())
+	case XOR:
+		return fmt.Sprintf("(^%s)", uo.Operand.String())
+	}
+	return "?"
+}
+
+func (uo *UnaryOperation) Accept(visitor Visitor) interface{} {
+	return visitor.VisitUnaryOperation(uo)
 }
 
 // Accept реализует Visitor pattern
@@ -140,9 +267,66 @@ type LogicalOperation struct {
 
 // NewLogicalOperation создаёт новую логическую операцию
 func NewLogicalOperation(operands []SymbolicExpression, op LogicalOperator) *LogicalOperation {
-	// TODO: Реализовать
-	// Создать логическую операцию и проверить типы операндов
-	panic("не реализовано")
+	lo := &LogicalOperation{
+		Operands: operands,
+		Operator: op,
+	}
+	if err := lo.validate(); err != nil {
+		panic(fmt.Sprintf("invalid logical operation: %v", err))
+	}
+	return lo
+}
+
+func (lo *LogicalOperation) validate() error {
+	switch lo.Operator {
+	case NOT:
+		if len(lo.Operands) != 1 {
+			return fmt.Errorf("NOT requires exactly 1 operand, got %d", len(lo.Operands))
+		}
+		if lo.Operands[0].Type() != BoolType {
+			return fmt.Errorf(
+				"NOT requires bool operand, got %s",
+				lo.Operands[0].Type(),
+			)
+		}
+
+	case AND, OR:
+		if len(lo.Operands) < 2 {
+			return fmt.Errorf(
+				"%s requires at least 2 operands, got %d",
+				lo.Operator, len(lo.Operands),
+			)
+		}
+		for i, operand := range lo.Operands {
+			if operand.Type() != BoolType {
+				return fmt.Errorf(
+					"%s operand %d must be bool, got %s",
+					lo.Operator, i, operand.Type(),
+				)
+			}
+		}
+
+	case IMPLIES:
+		if len(lo.Operands) != 2 {
+			return fmt.Errorf(
+				"IMPLIES requires exactly 2 operands, got %d",
+				len(lo.Operands),
+			)
+		}
+		for i, operand := range lo.Operands {
+			if operand.Type() != BoolType {
+				return fmt.Errorf(
+					"IMPLIES operand %d must be bool, got %s",
+					i, operand.Type(),
+				)
+			}
+		}
+
+	default:
+		return fmt.Errorf("unknown logical operator %d", lo.Operator)
+	}
+
+	return nil
 }
 
 // Type возвращает тип логической операции (всегда bool)
@@ -152,11 +336,27 @@ func (lo *LogicalOperation) Type() ExpressionType {
 
 // String возвращает строковое представление логической операции
 func (lo *LogicalOperation) String() string {
-	// TODO: Реализовать
-	// Для NOT: "!operand"
-	// Для AND/OR: "(operand1 && operand2 && ...)"
-	// Для IMPLIES: "(operand1 => operand2)"
-	panic("не реализовано")
+	switch lo.Operator {
+	case NOT:
+		return "!" + lo.Operands[0].String()
+
+	case AND, OR:
+		parts := make([]string, len(lo.Operands))
+		for i, operand := range lo.Operands {
+			parts[i] = operand.String()
+		}
+		return "(" + strings.Join(parts, " "+lo.Operator.String()+" ") + ")"
+
+	case IMPLIES:
+		return fmt.Sprintf(
+			"(%s => %s)",
+			lo.Operands[0].String(),
+			lo.Operands[1].String(),
+		)
+
+	default:
+		panic(fmt.Sprintf("unknown logical operator: %d", lo.Operator))
+	}
 }
 
 // Accept реализует Visitor pattern
