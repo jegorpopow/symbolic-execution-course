@@ -224,3 +224,73 @@ func (zt *Z3Translator) castToZ3Type(value interface{}, targetType symbolic.Expr
 		)
 	}
 }
+
+func (zt *Z3Translator) VisitRef(expr *symbolic.Ref) interface{} {
+	address, err := zt.TranslateExpression(expr.Address)
+	if err != nil {
+		panic(fmt.Sprintf("translate ref address: %v", err))
+	}
+	return address
+}
+
+func (zt *Z3Translator) VisitArrayVariable(expr *symbolic.ArrayVariable) interface{} {
+	if v, ok := zt.vars[expr.Name]; ok {
+		return v
+	}
+	v := zt.ctx.Const(expr.Name, zt.arraySort(expr.Element))
+	zt.vars[expr.Name] = v
+	return v
+}
+
+func (zt *Z3Translator) VisitArraySelect(expr *symbolic.ArrayAccess) interface{} {
+	arrayVal, err := zt.TranslateExpression(expr.Array)
+	if err != nil {
+		panic(fmt.Sprintf("translate array: %v", err))
+	}
+	indexVal, err := zt.TranslateExpression(expr.Index)
+	if err != nil {
+		panic(fmt.Sprintf("translate index: %v", err))
+	}
+	return arrayVal.(z3.Array).Select(indexVal.(z3.Int))
+}
+
+func (zt *Z3Translator) VisitArrayStore(expr *symbolic.ArrayStore) interface{} {
+	arrayVal, err := zt.TranslateExpression(expr.Array)
+	if err != nil {
+		panic(fmt.Sprintf("translate array: %v", err))
+	}
+	indexVal, err := zt.TranslateExpression(expr.Index)
+	if err != nil {
+		panic(fmt.Sprintf("translate index: %v", err))
+	}
+	valueVal, err := zt.TranslateExpression(expr.Value)
+	if err != nil {
+		panic(fmt.Sprintf("translate value: %v", err))
+	}
+	return arrayVal.(z3.Array).Store(indexVal.(z3.Int), valueVal.(z3.Value))
+}
+
+func (zt *Z3Translator) VisitConstantArray(expr *symbolic.FreshArray) interface{} {
+	value, err := zt.TranslateExpression(expr.Value)
+	if err != nil {
+		panic(fmt.Sprintf("translate constant array value: %v", err))
+	}
+	return zt.ctx.ConstArray(zt.ctx.IntSort(), value.(z3.Value))
+}
+
+func (zt *Z3Translator) sortOf(t *symbolic.DataShape) z3.Sort {
+	switch t.SymbolicType {
+	case symbolic.IntType, symbolic.RefType:
+		return zt.ctx.IntSort()
+	case symbolic.BoolType:
+		return zt.ctx.BoolSort()
+	case symbolic.ArrayType:
+		return zt.arraySort(t.Element)
+	default:
+		panic("Unsupported sort " + t.SymbolicType.String())
+	}
+}
+
+func (zt *Z3Translator) arraySort(element *symbolic.DataShape) z3.Sort {
+	return zt.ctx.ArraySort(zt.ctx.IntSort(), zt.sortOf(element))
+}

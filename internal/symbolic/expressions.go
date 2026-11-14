@@ -441,20 +441,115 @@ func (op LogicalOperator) String() string {
 }
 
 type Ref struct {
-	// TODO: Выбрать и написать внутреннее представление символьной ссылки
+	Address    SymbolicExpression
+	Referenced *DataShape
 }
 
-func (ref *Ref) Type() ExpressionType {
-	panic("не реализовано")
+func (r *Ref) Type() ExpressionType { return RefType }
+
+func (r *Ref) String() string { return "ref(" + r.Address.String() + ")" }
+
+func (r *Ref) Accept(v Visitor) interface{} {
+	return v.VisitRef(r)
 }
 
-func (ref *Ref) String() string {
-	panic("не реализовано")
+func NewRef(address SymbolicExpression, target *DataShape) *Ref {
+	return &Ref{Address: address, Referenced: target}
 }
 
-func (ref *Ref) Accept(visitor Visitor) interface{} {
-	panic("не реализовано")
+func NewSymbolicRef(name string, target *DataShape) *Ref {
+	return &Ref{Address: NewSymbolicVariable(name, IntType), Referenced: target}
 }
+
+type ArrayVariable struct {
+	Name    string
+	Element *DataShape
+}
+
+func NewArrayVariable(name string, element *DataShape) *ArrayVariable {
+	return &ArrayVariable{Name: name, Element: element}
+}
+
+func (av *ArrayVariable) Type() ExpressionType {
+	return ArrayType
+}
+
+func (av *ArrayVariable) String() string {
+	return av.Name
+}
+
+func (av *ArrayVariable) Accept(v Visitor) interface{} {
+	return v.VisitArrayVariable(av)
+}
+
+type ArrayAccess struct {
+	Array SymbolicExpression
+	Index SymbolicExpression
+}
+
+func NewArraySelect(array, index SymbolicExpression) *ArrayAccess {
+	return &ArrayAccess{Array: array, Index: index}
+}
+
+func (as *ArrayAccess) Type() ExpressionType {
+	return ResultShape(as.Array).Element.SymbolicType
+}
+
+func (as *ArrayAccess) String() string {
+	return as.Array.String() + "[" + as.Index.String() + "]"
+}
+
+func (as *ArrayAccess) Accept(v Visitor) interface{} {
+	return v.VisitArraySelect(as)
+}
+
+type ArrayStore struct {
+	Array SymbolicExpression
+	Index SymbolicExpression
+	Value SymbolicExpression
+}
+
+func NewArrayStore(array, index, value SymbolicExpression) *ArrayStore {
+	return &ArrayStore{Array: array, Index: index, Value: value}
+}
+func (as *ArrayStore) Type() ExpressionType {
+	return ArrayType
+}
+
+func (as *ArrayStore) String() string {
+	return "store(" + as.Array.String() + ", " +
+		as.Index.String() + ", " + as.Value.String() + ")"
+}
+
+func (as *ArrayStore) Accept(v Visitor) interface{} {
+	return v.VisitArrayStore(as)
+}
+
+type FreshArray struct {
+	Elem  *DataShape
+	Value SymbolicExpression
+}
+
+func NewConstantArray(elem *DataShape, value SymbolicExpression) *FreshArray {
+	return &FreshArray{Elem: elem, Value: value}
+}
+func (ca *FreshArray) Type() ExpressionType {
+	return ArrayType
+}
+
+func (ca *FreshArray) String() string {
+	return "const[" + ca.Value.String() + "]"
+}
+
+func (ca *FreshArray) Accept(v Visitor) interface{} {
+	return v.VisitConstantArray(ca)
+}
+
+func (r *Ref) Shape() *DataShape            { return RefShape(r.Referenced) }
+func (av *ArrayVariable) Shape() *DataShape { return ArrayShape(av.Element) }
+func (as *ArrayAccess) Shape() *DataShape   { return ResultShape(as.Array).Element }
+func (as *ArrayStore) Shape() *DataShape    { return ResultShape(as.Array) }
+func (ca *FreshArray) Shape() *DataShape    { return ArrayShape(ca.Elem) }
 
 // TODO: Добавьте дополнительные типы выражений по необходимости:
 // - UnaryOperation (унарные операции: -x, !x)
