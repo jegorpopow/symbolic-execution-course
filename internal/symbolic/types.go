@@ -9,8 +9,20 @@ const (
 	BoolType
 	ArrayType
 	FloatType
-	// Добавьте другие типы по необходимости
+	RefType
+	StructType
 )
+
+type Shaped interface {
+	Shape() *DataShape
+}
+
+func ResultShape(expr SymbolicExpression) *DataShape {
+	if s, ok := expr.(Shaped); ok {
+		return s.Shape()
+	}
+	return PrimitiveShape(expr.Type())
+}
 
 // String возвращает строковое представление типа
 func (et ExpressionType) String() string {
@@ -23,6 +35,10 @@ func (et ExpressionType) String() string {
 		return "array"
 	case FloatType:
 		return "float"
+	case RefType:
+		return "reference"
+	case StructType:
+		return "struct"
 	default:
 		return "unknown"
 	}
