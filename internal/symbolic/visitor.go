@@ -9,5 +9,10 @@ type Visitor interface {
 	VisitLogicalOperation(expr *LogicalOperation) interface{}
 	VisitFloatConstant(expr *FloatConstant) interface{}
 	VisitUnaryOperation(expr *UnaryOperation) interface{}
+	VisitRef(expr *Ref) interface{}
+	VisitArrayVariable(expr *ArrayVariable) interface{}
+	VisitArraySelect(expr *ArrayAccess) interface{}
+	VisitArrayStore(expr *ArrayStore) interface{}
+	VisitConstantArray(expr *FreshArray) interface{}
 	// TODO: Добавьте методы для других типов выражений по мере необходимости
 }
