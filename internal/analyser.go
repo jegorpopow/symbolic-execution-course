@@ -12,7 +12,7 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
-const stepsQuota = 5000
+const stepsQuota = 1000
 
 type Analyser struct {
 	Package      *ssa.Package
@@ -71,7 +71,7 @@ func Analyse(source, functionName string) []Interpreter {
 
 	for a.StatesQueue.Len() > 0 {
 		state := heap.Pop(&a.StatesQueue).(*Item).value
-		state.terminateWith()
+		state.terminateWith(TerminalUnknown)
 		a.Results = append(a.Results, state)
 	}
 

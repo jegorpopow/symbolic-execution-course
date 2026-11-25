@@ -13,12 +13,21 @@ import (
 	"golang.org/x/tools/go/ssa"
 )
 
+type TerminalStatus int
+
+const (
+	TerminalReturn = iota
+	TerminalPanic
+	TerminalUnknown
+)
+
 type Interpreter struct {
 	CallStack     []CallStackFrame
 	Analyser      *Analyser
 	PathCondition symbolic.SymbolicExpression
 	Heap          memory.Memory
 	Terminal      bool
+	Status        TerminalStatus
 }
 type InstructionPointer struct {
 	CurrentBlock     *ssa.BasicBlock
@@ -68,8 +77,9 @@ func getStringKey(value ssa.Value) string {
 	return value.Name()
 }
 
-func (s *Interpreter) terminateWith() {
+func (s *Interpreter) terminateWith(status TerminalStatus) {
 	s.Terminal = true
+	s.Status = status
 }
 
 func (interpreter *Interpreter) currentStackframe() *CallStackFrame {
@@ -163,9 +173,9 @@ func (interpreter *Interpreter) interpretDynamically(element ssa.Instruction) []
 		if len(results) == 1 {
 			currentFrame.ReturnValue = next.resolveExpression(results[0])
 		}
-		next.terminateWith()
+		next.terminateWith(TerminalReturn)
 	case *ssa.Panic:
-		next.terminateWith()
+		next.terminateWith(TerminalPanic)
 	case *ssa.MakeInterface:
 		currentFrame.IP.Advance()
 	case *ssa.BinOp:
