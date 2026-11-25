@@ -37,6 +37,9 @@ func main() {
 
 func runTestsWithCoverage(testFilePath string) (string, error) {
 	testDir := filepath.Dir(testFilePath)
+	if !filepath.IsAbs(testDir) {
+		testDir = "./" + testDir
+	}
 
 	coverageFile := filepath.Join(os.TempDir(), "coverage.out")
 	defer os.Remove(coverageFile)
